@@ -2,7 +2,7 @@
 #include <fstream>
 #include <string>
 #include <vector>
-
+#include <sstream>
 using namespace std;
 
 vector<string> parseCSVRow(const string& row_str) 
@@ -17,40 +17,37 @@ vector<string> parseCSVRow(const string& row_str)
 
         if (inside_quotes) 
         {
-            // 如果在引號內，遇到引號要特別處理
             if (c == '"') 
             {
-                // 檢查是否為連續兩個引號 (轉義)
                 if (i + 1 < row_str.length() && row_str[i + 1] == '"') 
                 {
                     current_field += '"';
-                    i++; // 跳過下一個引號
+                    i++; 
                 } 
                 else 
                 {
-                    inside_quotes = false; // 離開引號模式
+                    inside_quotes = false; 
                 }
             } 
             else 
             {
-                current_field += c; // 引號內的逗號會被當作一般字元收錄
+                current_field += c; 
             }
         } 
         else 
         {
-            // 不在引號內，遇到逗號就切開
             if (c == '"') 
             {
-                inside_quotes = true; // 進入引號模式
+                inside_quotes = true; 
             } 
             else if (c == ',') 
             {
                 fields.push_back(current_field);
-                current_field = ""; // 清空，準備裝下一個格子
+                current_field = ""; 
             } 
             else if (c == '\r' || c == '\n') 
             {
-                continue; // 略過換行符號
+                continue; 
             }
             else 
             {
@@ -58,48 +55,109 @@ vector<string> parseCSVRow(const string& row_str)
             }
         }
     }
-    // 把最後一格也放進去
     fields.push_back(current_field);
     return fields;
 }
 
-int main()
+vector<string> tokenizeCommand(const string& command) {
+    vector<string> tokens;
+    stringstream ss(command);
+    string token;
+    while (ss >> token) {
+        tokens.push_back(token);
+    }
+    return tokens;
+}
+
+// === 3. 各項指令的實作 (骨架) ===
+void executeHelp() {
+    cout << "Available Commands:\n";
+    cout << "  show columns  - Display table schema\n";
+    cout << "  select ...    - (Under construction)\n";
+    cout << "  help        - Show this help message\n";
+}
+
+void executeShowColumns() {
+    cout << "[Debug] Executing: SHOW COLUMNS\n";
+}
+
+void executeSelect(const vector<string>& tokens) {
+    cout << "[Debug] Executing: SELECT\n";
+    cout << "Tokens received:\n";
+    for(size_t i = 0; i < tokens.size(); ++i) {
+        cout << "  [" << i << "] " << tokens[i] << "\n";
+    }
+}
+
+// === 4. 核心路由大腦 (統整所有指令判斷) ===
+// 只要傳入切好的單字陣列，它就會決定該呼叫誰
+void processCommand(const vector<string>& tokens) {
+    if (tokens.empty()) return;
+
+    string primary_cmd = tokens[0];
+
+    if (primary_cmd == "exit" || primary_cmd == "quit") {
+        cout << "Goodbye!\n";
+        exit(0); // 強制結束程式
+    }
+    else if (primary_cmd == "help" || primary_cmd == "--help" || primary_cmd == "-h") {
+        executeHelp();
+    }
+    else if (primary_cmd == "show" && tokens.size() > 1 && tokens[1] == "columns") {
+        executeShowColumns();
+    }
+    else if (primary_cmd == "select" || primary_cmd == "SELECT") {
+        executeSelect(tokens);
+    }
+    else {
+        cout << "Unknown command: ";
+        for(const auto& t : tokens) cout << t << " ";
+        cout << "\n";
+    }
+}
+
+
+// === 5. 主程式 ===
+int main(int argc, char* argv[])
 {
+    // ... (一樣先開檔跟讀取 Header) ...
     string file_path = "students.csv";
     ifstream file(file_path);
-
-    if (!file) 
-    {
-        cerr << "file could not be opened: " << file_path << "\n";
+    if (!file) {
+        cerr << "Error: file could not be opened.\n";
         return 1;
     }
 
+    // --- 新增：處理外部傳入的 CLI 參數 ---
+    // argc 至少會是 1 (代表程式自己的名字)
+    // 如果 > 1，代表使用者有加上 --help 或其他指令
+    if (argc > 1) {
+        vector<string> cli_tokens;
+        // 把 argv[1] 到最後一個參數通通塞進 vector
+        for (int i = 1; i < argc; ++i) {
+            cli_tokens.push_back(argv[i]);
+        }
+        
+        // 丟給大腦處理，處理完就直接結束，不進入迴圈
+        processCommand(cli_tokens);
+        return 0; 
+    }
+
+    // --- 如果沒有外部參數，才進入 REPL 互動迴圈 ---
+    cout << "Database loaded. Entering interactive mode.\n";
+    cout << "Type 'HELP', 'SHOW COLUMNS', 'SELECT...', or 'EXIT'.\n";
     cout << "--------------------------------------------------\n";
 
-    string line;
-    int row_count = 0;
-
-    // 逐行讀取
-    while (getline(file, line)) 
+    string command;
+    while (true) 
     {
-        if (line.empty()) continue; // 跳過空行
+        cout << "> ";
+        if (!getline(cin, command)) break;
 
-        // 丟給 FSM 解析器去切
-        vector<string> fields = parseCSVRow(line);
-
-        // 印出結果，用中括號包起來，證明我們切得很乾淨
-        cout << "第 " << row_count << " 行: ";
-        for (size_t i = 0; i < fields.size(); ++i) 
-        {
-            cout << "[" << fields[i] << "] ";
-        }
-        cout << "\n";
-
-        row_count++;
+        vector<string> tokens = tokenizeCommand(command);
+        processCommand(tokens);
     }
 
     file.close();
-    cout << "--------------------------------------------------\n";
-
     return 0;
 }
